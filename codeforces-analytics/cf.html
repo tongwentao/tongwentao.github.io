@@ -13,7 +13,7 @@
 // @name         CF解题数据可视化 (Pro Max)
 // @name:en      codeforces analytics
 // @namespace    https://codeforces.com/profile/tongwentao
-// @version      2.2.0
+// @version      2.4.0
 // @description  全方位分析Codeforces做题数据：支持中英文切换，新增一键生成高清长图分享功能。
 // @description:en Analyse Codeforces profiles with 8 dimensions, bilingual support, and high-res image export.
 // @author       tongwentao
@@ -24,6 +24,7 @@
 // @require      https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js
 // @license      MIT
 // ==/UserScript==
+
 
 (function () {
     'use strict';
@@ -45,15 +46,37 @@
             attempts: 'Average Attempts to AC',
             participant: 'Participant Type',
             performance: 'Execution Performance',
+            memoryPerf: 'Memory Usage (KB vs Rating)',
             timeline: 'Activity Timeline (Monthly)',
+            heatmap: 'Submission Heatmap',
             unsolved: 'Unsolved Problems (Total: {n})',
             submissions: 'Submissions',
             time: 'Time (ms)',
+            memory: 'Memory (KB)',
             rating: 'Rating',
+            points: 'Points Earned',
+            streak: 'Max Streak',
+            days: 'days',
+            speed: 'Contest Speed Analysis',
             try1: '1 Try (One Shot)',
             try2: '2 Tries',
             try3_5: '3-5 Tries',
-            tryMore: '> 5 Tries (Struggle)'
+            tryMore: '> 5 Tries (Struggle)',
+            genErrorConsole: 'Failed to generate image:',
+            genErrorAlert: 'Sorry, failed to generate the image. Please check the console for errors.',
+            maRating: 'Moving Average Rating (Recent 20 ACs)',
+            weakness: 'Weakness Analysis (Average Tries per Tag)',
+            timeOfDay: 'Time of Day (Active Hours)',
+            errorDiag: 'Error Diagnosis (Failed at Test N)',
+            langDiff: 'Language vs Difficulty',
+            test1_2: 'Test 1-2 (Logic)',
+            test3_10: 'Test 3-10 (Basic Cases)',
+            test11_50: 'Test 11-50 (Edge Cases)',
+            test50plus: '>50 (Deep Edge)',
+            btnSettings: 'Settings',
+            settingsTitle: 'Chart Display Settings',
+            settingsSave: 'Save',
+            settingsCancel: 'Cancel'
         },
         zh: {
             loading: '正在加载分析数据 (Pro Max)...',
@@ -69,15 +92,37 @@
             attempts: '平均 AC 尝试次数',
             participant: '参赛类型分布',
             performance: '执行性能分布 (时间 vs 难度)',
+            memoryPerf: '内存使用分布 (KB vs 难度)',
             timeline: '刷题活跃度 (月度)',
+            heatmap: '提交热力图',
             unsolved: '未解决题目 (总计: {n} 题)',
             submissions: '提交数',
             time: '运行时间 (ms)',
+            memory: '内存 (KB)',
             rating: '难度',
+            points: '获得分数',
+            streak: '最长连续',
+            days: '天',
+            speed: '比赛速度分析',
             try1: '1 Try (一发入魂)',
             try2: '2 Tries',
             try3_5: '3-5 Tries',
-            tryMore: '> 5 Tries (折磨)'
+            tryMore: '> 5 Tries (折磨)',
+            genErrorConsole: '生成图片失败:',
+            genErrorAlert: '抱歉，生成图片失败，请检查控制台报错。',
+            maRating: '真实能力曲线 (最近20题均分)',
+            weakness: '弱点分析 (各标签平均尝试次数)',
+            timeOfDay: '刷题作息 (24小时分布)',
+            errorDiag: '错误诊断 (挂在第几个测试点)',
+            langDiff: '编程语言与解决难度',
+            test1_2: '测试点 1-2 (根本逻辑)',
+            test3_10: '测试点 3-10 (基础边界)',
+            test11_50: '测试点 11-50 (特殊用例)',
+            test50plus: '>50 (深层隐蔽 bug)',
+            btnSettings: '设置',
+            settingsTitle: '图表显示设置',
+            settingsSave: '保存',
+            settingsCancel: '取消'
         }
     };
 
@@ -90,6 +135,18 @@
     };
 
     const chartInstances = [];
+    let userSettings = {};
+    try {
+        const saved = localStorage.getItem('cf_analytics_settings');
+        if (saved) {
+            userSettings = JSON.parse(saved);
+        }
+    } catch (e) {
+        console.error('Failed to load settings', e);
+    }
+    const isChartEnabled = (chartId) => {
+        return userSettings[chartId] !== false;
+    };
 
     window.addEventListener('resize', () => {
         chartInstances.forEach(chart => chart && chart.resize());
@@ -122,6 +179,9 @@
             <div id="cf-header-bar" style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #ccc; padding-bottom: 10px; margin-bottom: 15px;">
                 <h2 style="margin: 0; color: #3b5998; font-weight: bold;">${t('titleText')}</h2>
                 <div style="display: flex; gap: 10px;">
+                    <button id="cf-settings-btn" style="padding: 5px 15px; cursor: pointer; border-radius: 4px; border: 1px solid #17a2b8; background: #17a2b8; color: white; font-weight: bold; transition: background 0.2s;">
+                        ${t('btnSettings')}
+                    </button>
                     <button id="cf-share-btn" style="padding: 5px 15px; cursor: pointer; border-radius: 4px; border: 1px solid #28a745; background: #28a745; color: white; font-weight: bold; transition: background 0.2s;">
                         ${t('btnShare')}
                     </button>
@@ -138,6 +198,85 @@
             chartInstances.forEach(chart => chart && chart.dispose());
             chartInstances.length = 0;
             drawCharts(res);
+        });
+
+        document.getElementById('cf-settings-btn').addEventListener('click', () => {
+            let modal = document.getElementById('cf-settings-modal');
+            const populateList = (list) => {
+                list.innerHTML = '';
+                const chartKeys = [
+                    { id: 'timelineChart', label: t('timeline') },
+                    { id: 'ratingChart', label: t('ratings') },
+                    { id: 'tagsChart', label: t('tags') },
+                    { id: 'langChart', label: t('lang') },
+                    { id: 'verdictChart', label: t('verdict') },
+                    { id: 'attemptsChart', label: t('attempts') },
+                    { id: 'participantChart', label: t('participant') },
+                    { id: 'performanceChart', label: t('performance') },
+                    { id: 'memoryChart', label: t('memoryPerf') },
+                    { id: 'speedChart', label: t('speed') },
+                    { id: 'maChart', label: t('maRating') },
+                    { id: 'timeOfDayChart', label: t('timeOfDay') },
+                    { id: 'weaknessChart', label: t('weakness') },
+                    { id: 'langDiffChart', label: t('langDiff') },
+                    { id: 'errorDiagChart', label: t('errorDiag') },
+                    { id: 'unsolvedChart', label: t('unsolved', {n: '?'}) }
+                ];
+                chartKeys.forEach(item => {
+                    const label = document.createElement('label');
+                    label.style.cssText = 'display: flex; align-items: center; gap: 10px; cursor: pointer; font-size: 14px;';
+                    const checked = userSettings[item.id] !== false ? 'checked' : '';
+                    label.innerHTML = `<input type="checkbox" data-id="${item.id}" ${checked}> <span>${item.label}</span>`;
+                    list.appendChild(label);
+                });
+            };
+
+            if (!modal) {
+                modal = document.createElement('div');
+                modal.id = 'cf-settings-modal';
+                modal.style.cssText = 'position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 9999; display: flex; justify-content: center; align-items: center;';
+                
+                const content = document.createElement('div');
+                content.style.cssText = 'background: white; padding: 20px; border-radius: 8px; width: 400px; max-width: 90vw; max-height: 80vh; overflow-y: auto; box-shadow: 0 4px 12px rgba(0,0,0,0.2);';
+                
+                content.innerHTML = `
+                    <h3 style="margin-top:0; border-bottom: 1px solid #ccc; padding-bottom: 10px; color: #333;">${t('settingsTitle')}</h3>
+                    <div id="cf-settings-list" style="display: flex; flex-direction: column; gap: 10px; margin-bottom: 20px; color: #333;">
+                    </div>
+                    <div style="display: flex; justify-content: flex-end; gap: 10px;">
+                        <button id="cf-settings-cancel" style="padding: 5px 15px; cursor: pointer; border-radius: 4px; border: 1px solid #ccc; background: #fff; color: #333; font-weight: bold;">${t('settingsCancel')}</button>
+                        <button id="cf-settings-save" style="padding: 5px 15px; cursor: pointer; border-radius: 4px; border: 1px solid #007bff; background: #007bff; color: white; font-weight: bold;">${t('settingsSave')}</button>
+                    </div>
+                `;
+                modal.appendChild(content);
+                document.body.appendChild(modal);
+
+                const list = document.getElementById('cf-settings-list');
+                populateList(list);
+
+                document.getElementById('cf-settings-cancel').addEventListener('click', () => {
+                    modal.style.display = 'none';
+                });
+
+                document.getElementById('cf-settings-save').addEventListener('click', () => {
+                    const checkboxes = list.querySelectorAll('input[type="checkbox"]');
+                    checkboxes.forEach(cb => {
+                        userSettings[cb.dataset.id] = cb.checked;
+                    });
+                    localStorage.setItem('cf_analytics_settings', JSON.stringify(userSettings));
+                    modal.style.display = 'none';
+                    // Re-draw charts
+                    chartInstances.forEach(chart => chart && chart.dispose());
+                    chartInstances.length = 0;
+                    drawCharts(res);
+                });
+            } else {
+                modal.style.display = 'flex';
+                modal.querySelector('h3').innerText = t('settingsTitle');
+                modal.querySelector('#cf-settings-cancel').innerText = t('settingsCancel');
+                modal.querySelector('#cf-settings-save').innerText = t('settingsSave');
+                populateList(document.getElementById('cf-settings-list'));
+            }
         });
 
         // 分享截图逻辑 (带用户名注入与图例数据展示)
@@ -230,8 +369,8 @@
                 a.click();
 
             } catch (err) {
-                console.error("生成图片失败:", err);
-                alert("抱歉，生成图片失败，请检查控制台报错。");
+                console.error(t('genErrorConsole'), err);
+                alert(t('genErrorAlert'));
             } finally {
                 btn.innerText = originalText;
                 btn.disabled = false;
@@ -249,26 +388,86 @@
     };
 
     // --- 图表渲染主逻辑 ---
-    function drawCharts(res) {
+    async function drawCharts(res) {
         initDashboardContainer(res);
 
-        drawTimelineChart('timelineChart', t('timeline'), res.timeline, '100%');
-        drawBarChart('ratingChart', t('ratings'), res.rating, '100%');
+        const yieldToMain = () => new Promise(r => setTimeout(r, 0));
+
+        await yieldToMain();
+        if (isChartEnabled('timelineChart')) drawTimelineChart('timelineChart', t('timeline'), res.timeline, '100%');
+        
+        await yieldToMain();
+        if (isChartEnabled('ratingChart')) drawBarChart('ratingChart', t('ratings'), res.rating, '100%');
 
         const localizedAttempts = {};
         for (const [key, value] of Object.entries(res.attempts)) {
             localizedAttempts[t(key)] = value;
         }
 
-        drawPieChart('tagsChart', t('tags'), res.tags);
-        drawPieChart('langChart', t('lang'), res.lang);
-        drawPieChart('verdictChart', t('verdict'), res.verdicts);
-        drawPieChart('attemptsChart', t('attempts'), localizedAttempts);
-        drawPieChart('participantChart', t('participant'), res.participantType);
-        drawScatterChart('performanceChart', t('performance'), res.performance);
+        await yieldToMain();
+        if (isChartEnabled('tagsChart')) drawPieChart('tagsChart', t('tags'), res.tags);
+        
+        await yieldToMain();
+        if (isChartEnabled('langChart')) drawPieChart('langChart', t('lang'), res.lang);
+        
+        await yieldToMain();
+        if (isChartEnabled('verdictChart')) drawPieChart('verdictChart', t('verdict'), res.verdicts);
+        
+        await yieldToMain();
+        if (isChartEnabled('attemptsChart')) drawPieChart('attemptsChart', t('attempts'), localizedAttempts);
+        
+        await yieldToMain();
+        if (isChartEnabled('participantChart')) drawPieChart('participantChart', t('participant'), res.participantType);
+        
+        await yieldToMain();
+        if (isChartEnabled('performanceChart')) drawScatterChart('performanceChart', t('performance'), res.performance, 'time');
+        
+        await yieldToMain();
+        if (isChartEnabled('memoryChart')) drawScatterChart('memoryChart', t('memoryPerf'), res.memoryPerformance, 'memory');
+        
+        await yieldToMain();
+        if (isChartEnabled('speedChart')) drawSpeedChart('speedChart', t('speed'), res.speedAnalysis, '49%');
+        
+        await yieldToMain();
+        if (isChartEnabled('maChart')) drawMACurveChart('maChart', t('maRating'), res.movingAverage, '100%');
+        
+        await yieldToMain();
+        if (isChartEnabled('timeOfDayChart')) drawTimeOfDayChart('timeOfDayChart', t('timeOfDay'), res.timeOfDay, '100%');
+        
+        await yieldToMain();
+        if (isChartEnabled('weaknessChart')) drawTagWeaknessChart('weaknessChart', t('weakness'), res.tagAttemptsAvg, '100%');
+        
+        await yieldToMain();
+        if (isChartEnabled('langDiffChart')) drawBarChart('langDiffChart', t('langDiff'), res.langDifficulty, '49%');
+        
+        const localizedErrorDiag = {};
+        for (const [key, value] of Object.entries(res.errorDiagnosis)) {
+            localizedErrorDiag[t(key)] = value;
+        }
+        
+        await yieldToMain();
+        if (isChartEnabled('errorDiagChart')) drawPieChart('errorDiagChart', t('errorDiag'), localizedErrorDiag);
 
-        drawUnsolvedChart(res.unsolved);
+        await yieldToMain();
+        // Stats summary is text, let's keep it or hide it? The user requested hiding charts, stats summary is fine. 
+        // We didn't give it a toggle in the UI, so it stays.
+        drawStatsSummary(res.stats);
+        
+        await yieldToMain();
+        if (isChartEnabled('unsolvedChart')) drawUnsolvedChart(res.unsolved);
     }
+
+    // --- 全局高级配置 (Premium Configurations) ---
+    const premiumColors = ['#5470c6', '#91cc75', '#fac858', '#ee6666', '#73c0de', '#3ba272', '#fc8452', '#9a60b4', '#ea7ccc'];
+    const premiumTooltip = {
+        backgroundColor: 'rgba(255, 255, 255, 0.9)',
+        borderColor: 'rgba(255, 255, 255, 0.2)',
+        borderWidth: 1,
+        padding: [10, 15],
+        textStyle: { color: '#333' },
+        extraCssText: 'box-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.15); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); border-radius: 12px;'
+    };
+    const premiumGrid = { left: '3%', right: '4%', bottom: '3%', containLabel: true };
 
     // --- 具体图表绘制函数 ---
     function drawBarChart(id, titleText, dataObj, width) {
@@ -281,16 +480,25 @@
         const yData = xData.map(key => dataObj[key]);
 
         myChart.setOption({
-            title: { text: titleText, left: 'center' },
-            tooltip: { trigger: 'axis', axisPointer: { type: 'shadow' } },
-            grid: { left: '3%', right: '4%', bottom: '3%', containLabel: true },
-            xAxis: [{ type: 'category', data: xData, axisTick: { alignWithLabel: true } }],
-            yAxis: [{ type: 'value' }],
+            animation: false,
+            title: { text: titleText, left: 'center', textStyle: { fontWeight: '600' } },
+            tooltip: { ...premiumTooltip, trigger: 'axis', axisPointer: { type: 'shadow', shadowStyle: { color: 'rgba(0,0,0,0.05)' } } },
+            grid: premiumGrid,
+            xAxis: [{ type: 'category', data: xData, axisTick: { alignWithLabel: true }, splitLine: { show: false } }],
+            yAxis: [{ type: 'value', splitLine: { lineStyle: { type: 'dashed', opacity: 0.3 } } }],
             series: [{
                 name: 'Solved', type: 'bar', barWidth: '60%',
-                data: yData.map((value, index) => ({
-                    value: value, itemStyle: { color: getRatingColor(Number(xData[index])) }
-                }))
+                itemStyle: {
+                    borderRadius: [6, 6, 0, 0],
+                    color: function(params) {
+                        const baseColor = getRatingColor(Number(xData[params.dataIndex]));
+                        return new echarts.graphic.LinearGradient(0, 0, 0, 1, [
+                            { offset: 0, color: baseColor },
+                            { offset: 1, color: '#ffffff' }
+                        ]);
+                    }
+                },
+                data: yData
             }]
         });
     }
@@ -304,37 +512,92 @@
         const dataArr = Object.entries(dataObj)
             .map(([name, value]) => ({ name, value }))
             .sort((a, b) => b.value - a.value);
+            
+        const totalValue = dataArr.reduce((sum, item) => sum + item.value, 0);
+
+        // Explicitly hide labels and lines for small slices to prevent spiderweb effect
+        dataArr.forEach(item => {
+            const percent = (item.value / totalValue) * 100;
+            if (percent < 4) {
+                item.label = { show: false };
+                item.labelLine = { show: false };
+            } else {
+                let shortName = item.name.length > 12 ? item.name.substring(0, 12) + '...' : item.name;
+                item.label = {
+                    formatter: `${shortName}\n${item.value} (${percent.toFixed(1)}%)`
+                };
+            }
+        });
 
         myChart.setOption({
-            title: {
-                text: titleText,
-                left: 'center',
-                top: 10,
-                textStyle: { fontSize: 14 }
-            },
-            tooltip: { trigger: 'item', formatter: '{b} : {c} ({d}%)' },
-            legend: {
-                type: 'scroll',
-                orient: 'vertical',
-                right: '2%',
-                top: 55,
-                bottom: 20,
-                width: '45%',
-                textStyle: {
-                    fontSize: 11,
-                    width: 100,
-                    overflow: 'truncate'
+            animation: false,
+            color: premiumColors,
+            title: [
+                { 
+                    text: titleText, left: 'center', top: 10, 
+                    textStyle: { fontSize: 14, fontWeight: '600', color: '#333' } 
                 },
+                {
+                    text: totalValue.toString(),
+                    subtext: currentLang === 'zh' ? '总计' : 'Total',
+                    left: 'center',
+                    top: '47%',
+                    textAlign: 'center',
+                    textStyle: { fontSize: 24, fontWeight: 'bold', color: '#0073e6', lineHeight: 28 },
+                    subtextStyle: { fontSize: 12, color: '#999', lineHeight: 14 }
+                }
+            ],
+            tooltip: { ...premiumTooltip, trigger: 'item', formatter: '{b} : {c} ({d}%)' },
+            legend: {
+                type: 'scroll', orient: 'horizontal', bottom: 10, left: 'center', width: '90%',
+                icon: 'circle', itemWidth: 10, itemHeight: 10, itemGap: 15,
+                textStyle: { fontSize: 11, color: '#666' },
                 tooltip: { show: true }
             },
             series: [{
-                type: 'pie',
-                radius: ['35%', '55%'],
-                center: ['33%', '55%'],
-                itemStyle: { borderRadius: 5, borderColor: '#fff', borderWidth: 2 },
+                type: 'pie', 
+                radius: ['35%', '50%'], 
+                center: ['50%', '50%'],
+                avoidLabelOverlap: true,
+                itemStyle: { 
+                    borderRadius: 8, 
+                    borderColor: '#fff', 
+                    borderWidth: 2,
+                    shadowBlur: 8,
+                    shadowColor: 'rgba(0, 0, 0, 0.15)',
+                    shadowOffsetY: 3
+                },
+                label: { 
+                    show: true, 
+                    color: '#555',
+                    fontSize: 11,
+                    fontWeight: '500',
+                    lineHeight: 14
+                },
+                labelLine: { 
+                    show: true,
+                    smooth: 0.2,
+                    length: 10,
+                    length2: 12,
+                    lineStyle: {
+                        width: 1.2,
+                        opacity: 0.8
+                    }
+                },
                 data: dataArr,
-                label: { show: false }, // 默认不显示，悬浮才高亮
-                emphasis: { label: { show: true, fontSize: 12, fontWeight: 'bold' } }
+                emphasis: {
+                    label: { 
+                        show: true, 
+                        fontSize: 12, 
+                        fontWeight: 'bold' 
+                    },
+                    itemStyle: { 
+                        shadowBlur: 20, 
+                        shadowOffsetX: 0, 
+                        shadowOffsetY: 8, 
+                        shadowColor: 'rgba(0, 0, 0, 0.3)' 
+                    }
+                }
             }]
         });
     }
@@ -349,40 +612,234 @@
         const yData = xData.map(key => dataObj[key]);
 
         myChart.setOption({
-            title: { text: titleText, left: 'center' },
-            tooltip: { trigger: 'axis' },
-            grid: { left: '3%', right: '4%', bottom: '3%', containLabel: true },
-            xAxis: { type: 'category', boundaryGap: false, data: xData },
-            yAxis: { type: 'value', name: t('submissions') },
+            animation: false,
+            title: { text: titleText, left: 'center', textStyle: { fontWeight: '600' } },
+            tooltip: { ...premiumTooltip, trigger: 'axis' },
+            grid: premiumGrid,
+            xAxis: { type: 'category', boundaryGap: false, data: xData, splitLine: { show: false } },
+            yAxis: { type: 'value', name: t('submissions'), splitLine: { lineStyle: { type: 'dashed', opacity: 0.3 } } },
             dataZoom: [{ type: 'inside', start: 0, end: 100 }, { start: 0, end: 100 }],
             series: [{
-                name: t('submissions'), type: 'line', smooth: true,
-                areaStyle: { opacity: 0.3, color: '#0073e6' },
-                lineStyle: { color: '#0073e6' }, itemStyle: { color: '#0073e6' },
+                name: t('submissions'), type: 'line', smooth: 0.4,
+                areaStyle: {
+                    color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
+                        { offset: 0, color: 'rgba(0, 115, 230, 0.4)' },
+                        { offset: 1, color: 'rgba(0, 115, 230, 0.0)' }
+                    ])
+                },
+                lineStyle: { color: '#0073e6', width: 3, shadowColor: 'rgba(0,115,230,0.3)', shadowBlur: 10 },
+                itemStyle: { color: '#0073e6' },
                 data: yData
             }]
         });
     }
 
-    function drawScatterChart(id, titleText, dataArr) {
+    function drawScatterChart(id, titleText, dataArr, metric) {
         if (dataArr.length === 0) return;
         const chartDom = createChartContainer(id, '49%');
         const myChart = echarts.init(chartDom);
         chartInstances.push(myChart);
 
+        const isMemory = metric === 'memory';
+        const axisName = isMemory ? t('memory') : t('time');
+        const colorBase = isMemory ? '40, 167, 69' : '0, 115, 230';
+        
         myChart.setOption({
-            title: { text: titleText, left: 'center', textStyle: { fontSize: 14 } },
+            animation: false,
+            title: { text: titleText, left: 'center', textStyle: { fontSize: 14, fontWeight: '600' } },
             grid: { left: '3%', right: '8%', bottom: '3%', containLabel: true },
             tooltip: {
+                ...premiumTooltip,
                 formatter: function (param) {
                     const data = param.data;
-                    return `<div style="font-weight:bold;">${data[2]}</div>${t('time')}: ${data[0]}<br/>${t('rating')}: ${data[1]}`;
+                    return `<div style="font-weight:bold;">${data[2]}</div>${axisName}: ${data[0]}<br/>${t('rating')}: ${data[1]}`;
                 }
             },
-            xAxis: { type: 'value', name: t('time'), splitLine: { show: false } },
-            yAxis: { type: 'value', name: t('rating'), splitLine: { show: false } },
-            series: [{ symbolSize: 6, data: dataArr, type: 'scatter', itemStyle: { color: 'rgba(0, 115, 230, 0.6)' } }]
+            xAxis: { type: 'value', name: axisName, splitLine: { show: false } },
+            yAxis: { type: 'value', name: t('rating'), splitLine: { lineStyle: { type: 'dashed', opacity: 0.3 } } },
+            series: [{ 
+                symbolSize: 8, 
+                data: dataArr, 
+                type: 'scatter', 
+                itemStyle: { 
+                    color: `rgba(${colorBase}, 0.7)`,
+                    shadowBlur: 5,
+                    shadowColor: `rgba(${colorBase}, 0.5)`
+                } 
+            }]
         });
+    }
+
+    function drawSpeedChart(id, titleText, speedData, width) {
+        if (!speedData || speedData.length === 0) return;
+        const chartDom = createChartContainer(id, width);
+        const myChart = echarts.init(chartDom);
+        chartInstances.push(myChart);
+
+        const categories = ['0-10min', '10-30min', '30-60min', '1-2h', '2-4h', '>4h'];
+        const values = categories.map(cat => speedData[cat] || 0);
+
+        myChart.setOption({
+            animation: false,
+            title: { text: titleText, left: 'center', textStyle: { fontSize: 14, fontWeight: '600' } },
+            tooltip: { ...premiumTooltip, trigger: 'axis', axisPointer: { type: 'shadow' } },
+            grid: premiumGrid,
+            xAxis: { type: 'category', data: categories, axisTick: { alignWithLabel: true }, splitLine: { show: false } },
+            yAxis: { type: 'value', name: t('submissions'), splitLine: { lineStyle: { type: 'dashed', opacity: 0.3 } } },
+            series: [{
+                name: t('submissions'),
+                type: 'bar',
+                data: values,
+                itemStyle: {
+                    borderRadius: [6, 6, 0, 0],
+                    color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
+                        { offset: 0, color: '#83bff6' },
+                        { offset: 0.5, color: '#188df0' },
+                        { offset: 1, color: '#188df0' }
+                    ])
+                },
+                emphasis: {
+                    itemStyle: {
+                        color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
+                            { offset: 0, color: '#2378f7' },
+                            { offset: 0.7, color: '#2378f7' },
+                            { offset: 1, color: '#83bff6' }
+                        ])
+                    }
+                }
+            }]
+        });
+    }
+
+    function drawMACurveChart(id, titleText, dataArr, width) {
+        if (dataArr.length === 0) return;
+        const chartDom = createChartContainer(id, width);
+        const myChart = echarts.init(chartDom);
+        chartInstances.push(myChart);
+
+        myChart.setOption({
+            animation: false,
+            title: { text: titleText, left: 'center', textStyle: { fontSize: 14, fontWeight: '600' } },
+            tooltip: { ...premiumTooltip, trigger: 'axis' },
+            grid: premiumGrid,
+            xAxis: { type: 'category', boundaryGap: false, data: dataArr.map(d => d[0]), splitLine: { show: false } },
+            yAxis: { type: 'value', min: 'dataMin', splitLine: { lineStyle: { type: 'dashed', opacity: 0.3 } } },
+            dataZoom: [{ type: 'inside', start: 0, end: 100 }, { start: 0, end: 100 }],
+            series: [{
+                name: 'Avg Rating',
+                type: 'line',
+                smooth: 0.4,
+                symbol: 'none',
+                areaStyle: {
+                    color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
+                        { offset: 0, color: 'rgba(219, 112, 147, 0.6)' },
+                        { offset: 1, color: 'rgba(219, 112, 147, 0.05)' }
+                    ])
+                },
+                lineStyle: { color: '#db7093', width: 3, shadowBlur: 10, shadowColor: 'rgba(219, 112, 147, 0.4)' },
+                data: dataArr.map(d => d[1])
+            }]
+        });
+    }
+
+    function drawTimeOfDayChart(id, titleText, timeArr, width) {
+        const chartDom = createChartContainer(id, width);
+        const myChart = echarts.init(chartDom);
+        chartInstances.push(myChart);
+
+        const xData = Array.from({length: 24}, (_, i) => i + ':00');
+        myChart.setOption({
+            animation: false,
+            title: { text: titleText, left: 'center', textStyle: { fontSize: 14, fontWeight: '600' } },
+            tooltip: { ...premiumTooltip, trigger: 'axis', axisPointer: { type: 'shadow' } },
+            grid: premiumGrid,
+            xAxis: { type: 'category', data: xData, axisTick: { alignWithLabel: true }, splitLine: { show: false } },
+            yAxis: { type: 'value', splitLine: { lineStyle: { type: 'dashed', opacity: 0.3 } } },
+            series: [{
+                name: 'Submissions',
+                type: 'bar',
+                data: timeArr,
+                itemStyle: {
+                    borderRadius: [6, 6, 0, 0],
+                    color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
+                        { offset: 0, color: '#4facfe' },
+                        { offset: 1, color: '#00f2fe' }
+                    ])
+                }
+            }]
+        });
+    }
+
+    function drawTagWeaknessChart(id, titleText, tagData, width) {
+        if (Object.keys(tagData).length === 0) return;
+        const chartDom = createChartContainer(id, width);
+        const myChart = echarts.init(chartDom);
+        chartInstances.push(myChart);
+
+        const dataArr = Object.entries(tagData)
+            .sort((a, b) => a[1] - b[1]);
+
+        const yData = dataArr.map(d => d[0]);
+        const xData = dataArr.map(d => d[1].toFixed(1));
+
+        myChart.setOption({
+            animation: false,
+            title: { text: titleText, left: 'center', textStyle: { fontSize: 14, fontWeight: '600' } },
+            tooltip: { ...premiumTooltip, trigger: 'axis', axisPointer: { type: 'shadow' } },
+            grid: { left: '3%', right: '8%', bottom: '3%', containLabel: true },
+            xAxis: { type: 'value', name: 'Avg Tries', splitLine: { lineStyle: { type: 'dashed', opacity: 0.3 } } },
+            yAxis: { type: 'category', data: yData, axisLabel: { width: 100, overflow: 'truncate' }, splitLine: { show: false } },
+            dataZoom: [{ type: 'slider', yAxisIndex: 0, start: Math.max(0, 100 - (15 / yData.length * 100)), end: 100 }],
+            series: [{
+                name: 'Avg Tries',
+                type: 'bar',
+                data: xData,
+                itemStyle: {
+                    borderRadius: [0, 6, 6, 0],
+                    color: new echarts.graphic.LinearGradient(1, 0, 0, 0, [
+                        { offset: 0, color: '#ff758c' },
+                        { offset: 1, color: '#ff7eb3' }
+                    ])
+                },
+                label: { show: true, position: 'right', fontWeight: 'bold' }
+            }]
+        });
+    }
+
+    function drawStatsSummary(stats) {
+        if (!stats) return;
+        
+        const div = `
+            <div class="roundbox userActivityRoundBox borderTopRound borderBottomRound" style="width: 100%; padding: 1.5em; margin-top: 1em; box-sizing: border-box;">
+                <h4 style="font-size: 1.2em; color: #333; font-weight: bold; margin-bottom: 1em;">📊 ${currentLang === 'zh' ? '统计摘要' : 'Statistics Summary'}</h4>
+                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px;">
+                    <div style="background: #ffffff; padding: 15px; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.05); border-left: 4px solid #0073e6; transition: all 0.3s; cursor: default;" onmouseover="this.style.transform='translateY(-2px)'; this.style.boxShadow='0 6px 20px rgba(0,0,0,0.1)';" onmouseout="this.style.transform='translateY(0)'; this.style.boxShadow='0 4px 15px rgba(0,0,0,0.05)';">
+                        <div style="font-size: 0.9em; color: #666; margin-bottom: 5px;">${currentLang === 'zh' ? '总提交数' : 'Total Submissions'}</div>
+                        <div style="font-size: 1.8em; font-weight: bold; color: #0073e6;">${stats.totalSubmissions || 0}</div>
+                    </div>
+                    <div style="background: #ffffff; padding: 15px; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.05); border-left: 4px solid #28a745; transition: all 0.3s; cursor: default;" onmouseover="this.style.transform='translateY(-2px)'; this.style.boxShadow='0 6px 20px rgba(0,0,0,0.1)';" onmouseout="this.style.transform='translateY(0)'; this.style.boxShadow='0 4px 15px rgba(0,0,0,0.05)';">
+                        <div style="font-size: 0.9em; color: #666; margin-bottom: 5px;">${currentLang === 'zh' ? '已解决题目' : 'Solved Problems'}</div>
+                        <div style="font-size: 1.8em; font-weight: bold; color: #28a745;">${stats.solvedProblems || 0}</div>
+                    </div>
+                    <div style="background: #ffffff; padding: 15px; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.05); border-left: 4px solid #ffc107; transition: all 0.3s; cursor: default;" onmouseover="this.style.transform='translateY(-2px)'; this.style.boxShadow='0 6px 20px rgba(0,0,0,0.1)';" onmouseout="this.style.transform='translateY(0)'; this.style.boxShadow='0 4px 15px rgba(0,0,0,0.05)';">
+                        <div style="font-size: 0.9em; color: #666; margin-bottom: 5px;">${t('streak')}</div>
+                        <div style="font-size: 1.8em; font-weight: bold; color: #ffc107;">${stats.maxStreak || 0} <span style="font-size:0.6em">${t('days')}</span></div>
+                    </div>
+                    <div style="background: #ffffff; padding: 15px; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.05); border-left: 4px solid #dc3545; transition: all 0.3s; cursor: default;" onmouseover="this.style.transform='translateY(-2px)'; this.style.boxShadow='0 6px 20px rgba(0,0,0,0.1)';" onmouseout="this.style.transform='translateY(0)'; this.style.boxShadow='0 4px 15px rgba(0,0,0,0.05)';">
+                        <div style="font-size: 0.9em; color: #666; margin-bottom: 5px;">${t('points')}</div>
+                        <div style="font-size: 1.8em; font-weight: bold; color: #dc3545;">${stats.totalPoints || 0}</div>
+                    </div>
+                    <div style="background: #ffffff; padding: 15px; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.05); border-left: 4px solid #6f42c1; transition: all 0.3s; cursor: default;" onmouseover="this.style.transform='translateY(-2px)'; this.style.boxShadow='0 6px 20px rgba(0,0,0,0.1)';" onmouseout="this.style.transform='translateY(0)'; this.style.boxShadow='0 4px 15px rgba(0,0,0,0.05)';">
+                        <div style="font-size: 0.9em; color: #666; margin-bottom: 5px;">${currentLang === 'zh' ? 'AC率' : 'AC Rate'}</div>
+                        <div style="font-size: 1.8em; font-weight: bold; color: #6f42c1;">${stats.acRate ? stats.acRate.toFixed(1) + '%' : '0%'}</div>
+                    </div>
+                    <div style="background: #ffffff; padding: 15px; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.05); border-left: 4px solid #fd7e14; transition: all 0.3s; cursor: default;" onmouseover="this.style.transform='translateY(-2px)'; this.style.boxShadow='0 6px 20px rgba(0,0,0,0.1)';" onmouseout="this.style.transform='translateY(0)'; this.style.boxShadow='0 4px 15px rgba(0,0,0,0.05)';">
+                        <div style="font-size: 0.9em; color: #666; margin-bottom: 5px;">${currentLang === 'zh' ? '最高难度' : 'Highest Rating'}</div>
+                        <div style="font-size: 1.8em; font-weight: bold; color: #fd7e14;">${stats.highestRating || '-'}</div>
+                    </div>
+                </div>
+            </div>`;
+        document.getElementById('cf-analytics-dashboard').insertAdjacentHTML('beforeend', div);
     }
 
     function drawUnsolvedChart(unsolvedData) {
@@ -391,13 +848,13 @@
 
         const div = `
             <div class="roundbox userActivityRoundBox borderTopRound borderBottomRound" style="width: 100%; padding: 1.5em; margin-top: 1em; box-sizing: border-box;">
-                <h4 style="font-size: 1.2em; color: #333; font-weight: bold; margin-bottom: 0.5em;">${t('unsolved', { n: unsolvedKeys.length })}</h4>
+                <h4 style="font-size: 1.2em; color: #333; font-weight: bold; margin-bottom: 0.8em;">🔥 ${t('unsolved', { n: unsolvedKeys.length })}</h4>
                 <div style="display: flex; flex-wrap: wrap; gap: 8px;">
                     ${Object.entries(unsolvedData).map(([id, info]) => {
                         const baseUrl = info.contestId < 10000
                             ? `https://codeforces.com/problemset/problem/${info.contestId}/${info.problemIndex}`
                             : `https://codeforces.com/problemset/gymProblem/${info.contestId}/${info.problemIndex}`;
-                        return `<a href="${baseUrl}" target="_blank" style="text-decoration: none; color: #d9534f; background: #fdf0ef; padding: 4px 8px; border-radius: 4px; border: 1px solid #d9534f; font-size: 0.85em;">${id}</a>`;
+                        return `<a href="${baseUrl}" target="_blank" style="text-decoration: none; color: #d9534f; background: #fff0f0; padding: 4px 10px; border-radius: 6px; border: 1px solid rgba(217,83,79,0.3); font-size: 0.85em; transition: all 0.2s; box-shadow: 0 2px 5px rgba(217,83,79,0.05);" onmouseover="this.style.background='#d9534f'; this.style.color='#fff';" onmouseout="this.style.background='#fff0f0'; this.style.color='#d9534f';">${id}</a>`;
                     }).join('')}
                 </div>
             </div>`;
@@ -408,14 +865,48 @@
     function processSubmissions(submissions) {
         submissions.sort((a, b) => a.creationTimeSeconds - b.creationTimeSeconds);
 
-        const res = { rating: {}, tags: {}, lang: {}, unsolved: {}, verdicts: {}, participantType: {}, attempts: {}, timeline: {}, performance: [] };
+        const res = { 
+            rating: {}, 
+            tags: {}, 
+            lang: {}, 
+            unsolved: {}, 
+            verdicts: {}, 
+            participantType: {}, 
+            attempts: {}, 
+            timeline: {}, 
+            performance: [],
+            memoryPerformance: [],
+            speedAnalysis: {},
+            movingAverage: [],
+            tagAttemptsAvg: {},
+            timeOfDay: new Array(24).fill(0),
+            errorDiagnosis: {},
+            langDifficulty: {},
+            stats: {
+                totalSubmissions: 0,
+                solvedProblems: 0,
+                maxStreak: 0,
+                totalPoints: 0,
+                acRate: 0,
+                highestRating: 0
+            }
+        };
+        const acRatingsTimeline = [];
+        const tagTriesAgg = {};
+        const langRatingAgg = {};
         const problemState = new Map();
         const solvedProblems = new Map();
+        const dailySubmissions = new Map();
+        let totalAC = 0;
+        let totalSubmissions = submissions.length;
 
         submissions.forEach(sub => {
             const problem = sub.problem;
             if (!problem || !problem.contestId) return;
             const problemId = `${problem.contestId}${problem.index}`;
+
+            // Count total submissions
+            res.stats.totalSubmissions++;
 
             let v = sub.verdict;
             if (v) {
@@ -424,7 +915,11 @@
                 else if (v === 'MEMORY_LIMIT_EXCEEDED') v = 'MLE';
                 else if (v === 'COMPILATION_ERROR') v = 'CE';
                 else if (v === 'RUNTIME_ERROR') v = 'RE';
-                else if (v === 'OK') v = 'AC';
+                else if (v === 'OK') {
+                    v = 'AC';
+                    totalAC++;
+                }
+                else if (v === 'PASSED_PRETESTS') v = 'Pretest OK';
                 res.verdicts[v] = (res.verdicts[v] || 0) + 1;
             }
 
@@ -432,9 +927,36 @@
                 res.participantType[sub.author.participantType] = (res.participantType[sub.author.participantType] || 0) + 1;
             }
 
+            // Timeline data (monthly)
             const date = new Date(sub.creationTimeSeconds * 1000);
             const monthStr = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
             res.timeline[monthStr] = (res.timeline[monthStr] || 0) + 1;
+            
+            // Time of day
+            res.timeOfDay[date.getHours()]++;
+            
+            // Error diagnosis
+            if (sub.verdict === 'WRONG_ANSWER' || sub.verdict === 'TIME_LIMIT_EXCEEDED') {
+                const passed = sub.passedTestCount || 0;
+                let bucket = 'test1_2';
+                if (passed >= 2 && passed < 10) bucket = 'test3_10';
+                else if (passed >= 10 && passed < 50) bucket = 'test11_50';
+                else if (passed >= 50) bucket = 'test50plus';
+                res.errorDiagnosis[bucket] = (res.errorDiagnosis[bucket] || 0) + 1;
+            }
+
+            // Contest speed analysis
+            if (sub.relativeTimeSeconds && sub.relativeTimeSeconds < 2147483647) {
+                const minutes = sub.relativeTimeSeconds / 60;
+                let speedCategory;
+                if (minutes <= 10) speedCategory = '0-10min';
+                else if (minutes <= 30) speedCategory = '10-30min';
+                else if (minutes <= 60) speedCategory = '30-60min';
+                else if (minutes <= 120) speedCategory = '1-2h';
+                else if (minutes <= 240) speedCategory = '2-4h';
+                else speedCategory = '>4h';
+                res.speedAnalysis[speedCategory] = (res.speedAnalysis[speedCategory] || 0) + 1;
+            }
 
             if (!problemState.has(problemId)) problemState.set(problemId, { ac: false, tries: 0 });
             const pState = problemState.get(problemId);
@@ -446,9 +968,48 @@
                     let tryKey = pState.tries === 1 ? 'try1' : pState.tries === 2 ? 'try2' : pState.tries <= 5 ? 'try3_5' : 'tryMore';
                     res.attempts[tryKey] = (res.attempts[tryKey] || 0) + 1;
 
+                    // Performance data
                     if (problem.rating && sub.timeConsumedMillis !== undefined) {
                         res.performance.push([sub.timeConsumedMillis, problem.rating, problem.name]);
                     }
+                    
+                    // Memory performance data
+                    if (problem.rating && sub.memoryConsumedBytes !== undefined) {
+                        const memoryKB = Math.round(sub.memoryConsumedBytes / 1024);
+                        res.memoryPerformance.push([memoryKB, problem.rating, problem.name]);
+                    }
+
+                    // Points tracking
+                    if (problem.points) {
+                        res.stats.totalPoints += problem.points;
+                    }
+
+                    // Track highest rating
+                    if (problem.rating && problem.rating > res.stats.highestRating) {
+                        res.stats.highestRating = problem.rating;
+                    }
+                    
+                    // Moving Average
+                    if (problem.rating) {
+                        acRatingsTimeline.push({ date: date, rating: problem.rating });
+                    }
+                    
+                    // Tag weakness analysis
+                    if (problem.tags) {
+                        problem.tags.forEach(tag => {
+                            if (!tagTriesAgg[tag]) tagTriesAgg[tag] = { tries: 0, ac: 0 };
+                            tagTriesAgg[tag].tries += pState.tries;
+                            tagTriesAgg[tag].ac += 1;
+                        });
+                    }
+                    
+                    // Language difficulty
+                    if (problem.rating && sub.programmingLanguage) {
+                        if (!langRatingAgg[sub.programmingLanguage]) langRatingAgg[sub.programmingLanguage] = { sum: 0, count: 0 };
+                        langRatingAgg[sub.programmingLanguage].sum += problem.rating;
+                        langRatingAgg[sub.programmingLanguage].count += 1;
+                    }
+
                     solvedProblems.set(problemId, sub);
                     if (res.unsolved[problemId]) delete res.unsolved[problemId];
                 } else {
@@ -457,6 +1018,7 @@
             }
         });
 
+        // Process solved problems
         solvedProblems.forEach(sub => {
             const { rating, tags } = sub.problem;
             const lang = sub.programmingLanguage;
@@ -465,7 +1027,63 @@
             if (tags && tags.length > 0) tags.forEach(tag => { res.tags[tag] = (res.tags[tag] || 0) + 1; });
         });
 
+        // Post-process new analytics
+        const windowSize = 20;
+        let sum = 0;
+        for (let i = 0; i < acRatingsTimeline.length; i++) {
+            sum += acRatingsTimeline[i].rating;
+            if (i >= windowSize) {
+                sum -= acRatingsTimeline[i - windowSize].rating;
+            }
+            const count = Math.min(i + 1, windowSize);
+            const dateStr = acRatingsTimeline[i].date.toISOString().split('T')[0];
+            res.movingAverage.push([dateStr, Math.round(sum / count)]);
+        }
+        
+        for (const [tag, agg] of Object.entries(tagTriesAgg)) {
+            if (agg.ac > 0) res.tagAttemptsAvg[tag] = agg.tries / agg.ac;
+        }
+        
+        for (const [lang, agg] of Object.entries(langRatingAgg)) {
+            if (agg.count > 0) {
+                res.langDifficulty[lang] = Math.round(agg.sum / agg.count);
+            }
+        }
+
+        // Calculate stats
+        res.stats.solvedProblems = solvedProblems.size;
+        res.stats.acRate = totalSubmissions > 0 ? (totalAC / totalSubmissions * 100) : 0;
+
+        // Calculate max streak using monthly timeline data
+        res.stats.maxStreak = calculateMaxStreakFromTimeline(res.timeline);
+
         return res;
+    }
+
+    function calculateMaxStreakFromTimeline(timelineData) {
+        if (Object.keys(timelineData).length === 0) return 0;
+        
+        const months = Object.keys(timelineData).sort();
+        let maxStreak = 1;
+        let currentStreak = 1;
+
+        for (let i = 1; i < months.length; i++) {
+            const prevMonth = new Date(months[i - 1] + '-01');
+            const currMonth = new Date(months[i] + '-01');
+            
+            // Check if months are consecutive
+            const diffMonths = (currMonth.getFullYear() - prevMonth.getFullYear()) * 12 + 
+                              (currMonth.getMonth() - prevMonth.getMonth());
+
+            if (diffMonths === 1) {
+                currentStreak++;
+                maxStreak = Math.max(maxStreak, currentStreak);
+            } else {
+                currentStreak = 1;
+            }
+        }
+
+        return maxStreak;
     }
 
     // --- 加载状态管理 ---
@@ -494,7 +1112,6 @@
 
     // --- 主入口 ---
     async function init() {
-        const pathname = window.location.pathname;
         var handle = "";
         const queryString = window.location.search;
         const urlParams = new URLSearchParams(queryString);
@@ -514,7 +1131,7 @@
 
             if (json.status === "OK") {
                 const processedData = processSubmissions(json.result);
-                drawCharts(processedData);
+                await drawCharts(processedData);
             }
         } catch (err) {
             console.error("Failed to load CF Data:", err);
@@ -528,3 +1145,4 @@
 })();
     </script>
 </body>
+</html>
