@@ -13,7 +13,7 @@
 // @name         CF解题数据可视化 (Pro Max)
 // @name:en      codeforces analytics
 // @namespace    https://codeforces.com/profile/tongwentao
-// @version      2.4.0
+// @version      2.4.1
 // @description  全方位分析Codeforces做题数据：支持中英文切换，新增一键生成高清长图分享功能。
 // @description:en Analyse Codeforces profiles with 8 dimensions, bilingual support, and high-res image export.
 // @author       tongwentao
@@ -34,6 +34,10 @@
     const i18n = {
         en: {
             loading: 'Loading Analytics (Pro Max)...',
+            loadingFetch: 'Fetching submissions from Codeforces API...',
+            loadingProcess: 'Analyzing and processing submissions...',
+            loadingDraw: 'Drawing: {chart}',
+            loadingComplete: 'Loading Complete!',
             fetchError: 'Failed to load data, possibly rate-limited by CF. Please try again later.',
             titleText: 'Codeforces Analytics',
             btnSwitch: '中文',
@@ -76,10 +80,15 @@
             btnSettings: 'Settings',
             settingsTitle: 'Chart Display Settings',
             settingsSave: 'Save',
-            settingsCancel: 'Cancel'
+            settingsCancel: 'Cancel',
+            liteMode: 'Lite Mode (Disable heavy graphics/filters)'
         },
         zh: {
             loading: '正在加载分析数据 (Pro Max)...',
+            loadingFetch: '正在从 Codeforces 获取提交数据...',
+            loadingProcess: '正在分析与处理提交数据...',
+            loadingDraw: '正在绘制：{chart}',
+            loadingComplete: '加载完成！',
             fetchError: '加载数据失败，可能是 CF 接口限流，请稍后再试。',
             titleText: 'CF 解题数据可视化',
             btnSwitch: 'English',
@@ -122,7 +131,8 @@
             btnSettings: '设置',
             settingsTitle: '图表显示设置',
             settingsSave: '保存',
-            settingsCancel: '取消'
+            settingsCancel: '取消',
+            liteMode: '低配模式 (禁用重度图效/滤镜)'
         }
     };
 
@@ -229,6 +239,17 @@
                     label.innerHTML = `<input type="checkbox" data-id="${item.id}" ${checked}> <span>${item.label}</span>`;
                     list.appendChild(label);
                 });
+
+                // Add divider and Lite Mode performance setting toggle
+                const hr = document.createElement('hr');
+                hr.style.cssText = 'border: 0; border-top: 1px solid #eee; margin: 10px 0;';
+                list.appendChild(hr);
+
+                const liteLabel = document.createElement('label');
+                liteLabel.style.cssText = 'display: flex; align-items: center; gap: 10px; cursor: pointer; font-size: 14px; font-weight: bold; color: #d9534f;';
+                const liteChecked = userSettings.liteMode === true ? 'checked' : '';
+                liteLabel.innerHTML = `<input type="checkbox" data-id="liteMode" ${liteChecked}> <span>⚡ ${t('liteMode')}</span>`;
+                list.appendChild(liteLabel);
             };
 
             if (!modal) {
@@ -393,79 +414,138 @@
 
         const yieldToMain = () => new Promise(r => setTimeout(r, 0));
 
-        await yieldToMain();
-        if (isChartEnabled('timelineChart')) drawTimelineChart('timelineChart', t('timeline'), res.timeline, '100%');
+        if (isChartEnabled('timelineChart')) {
+            updateProgress(t('loadingDraw', { chart: t('timeline') }), 1);
+            await yieldToMain();
+            drawTimelineChart('timelineChart', t('timeline'), res.timeline, '100%');
+        }
         
-        await yieldToMain();
-        if (isChartEnabled('ratingChart')) drawBarChart('ratingChart', t('ratings'), res.rating, '100%');
+        if (isChartEnabled('ratingChart')) {
+            updateProgress(t('loadingDraw', { chart: t('ratings') }), 1);
+            await yieldToMain();
+            drawBarChart('ratingChart', t('ratings'), res.rating, '100%');
+        }
 
         const localizedAttempts = {};
         for (const [key, value] of Object.entries(res.attempts)) {
             localizedAttempts[t(key)] = value;
         }
 
-        await yieldToMain();
-        if (isChartEnabled('tagsChart')) drawPieChart('tagsChart', t('tags'), res.tags);
+        if (isChartEnabled('tagsChart')) {
+            updateProgress(t('loadingDraw', { chart: t('tags') }), 1);
+            await yieldToMain();
+            drawPieChart('tagsChart', t('tags'), res.tags);
+        }
         
-        await yieldToMain();
-        if (isChartEnabled('langChart')) drawPieChart('langChart', t('lang'), res.lang);
+        if (isChartEnabled('langChart')) {
+            updateProgress(t('loadingDraw', { chart: t('lang') }), 1);
+            await yieldToMain();
+            drawPieChart('langChart', t('lang'), res.lang);
+        }
         
-        await yieldToMain();
-        if (isChartEnabled('verdictChart')) drawPieChart('verdictChart', t('verdict'), res.verdicts);
+        if (isChartEnabled('verdictChart')) {
+            updateProgress(t('loadingDraw', { chart: t('verdict') }), 1);
+            await yieldToMain();
+            drawPieChart('verdictChart', t('verdict'), res.verdicts);
+        }
         
-        await yieldToMain();
-        if (isChartEnabled('attemptsChart')) drawPieChart('attemptsChart', t('attempts'), localizedAttempts);
+        if (isChartEnabled('attemptsChart')) {
+            updateProgress(t('loadingDraw', { chart: t('attempts') }), 1);
+            await yieldToMain();
+            drawPieChart('attemptsChart', t('attempts'), localizedAttempts);
+        }
         
-        await yieldToMain();
-        if (isChartEnabled('participantChart')) drawPieChart('participantChart', t('participant'), res.participantType);
+        if (isChartEnabled('participantChart')) {
+            updateProgress(t('loadingDraw', { chart: t('participant') }), 1);
+            await yieldToMain();
+            drawPieChart('participantChart', t('participant'), res.participantType);
+        }
         
-        await yieldToMain();
-        if (isChartEnabled('performanceChart')) drawScatterChart('performanceChart', t('performance'), res.performance, 'time');
+        if (isChartEnabled('performanceChart')) {
+            updateProgress(t('loadingDraw', { chart: t('performance') }), 1);
+            await yieldToMain();
+            drawScatterChart('performanceChart', t('performance'), res.performance, 'time');
+        }
         
-        await yieldToMain();
-        if (isChartEnabled('memoryChart')) drawScatterChart('memoryChart', t('memoryPerf'), res.memoryPerformance, 'memory');
+        if (isChartEnabled('memoryChart')) {
+            updateProgress(t('loadingDraw', { chart: t('memoryPerf') }), 1);
+            await yieldToMain();
+            drawScatterChart('memoryChart', t('memoryPerf'), res.memoryPerformance, 'memory');
+        }
         
-        await yieldToMain();
-        if (isChartEnabled('speedChart')) drawSpeedChart('speedChart', t('speed'), res.speedAnalysis, '49%');
+        if (isChartEnabled('speedChart')) {
+            updateProgress(t('loadingDraw', { chart: t('speed') }), 1);
+            await yieldToMain();
+            drawSpeedChart('speedChart', t('speed'), res.speedAnalysis, '49%');
+        }
         
-        await yieldToMain();
-        if (isChartEnabled('maChart')) drawMACurveChart('maChart', t('maRating'), res.movingAverage, '100%');
+        if (isChartEnabled('maChart')) {
+            updateProgress(t('loadingDraw', { chart: t('maRating') }), 1);
+            await yieldToMain();
+            drawMACurveChart('maChart', t('maRating'), res.movingAverage, '100%');
+        }
         
-        await yieldToMain();
-        if (isChartEnabled('timeOfDayChart')) drawTimeOfDayChart('timeOfDayChart', t('timeOfDay'), res.timeOfDay, '100%');
+        if (isChartEnabled('timeOfDayChart')) {
+            updateProgress(t('loadingDraw', { chart: t('timeOfDay') }), 1);
+            await yieldToMain();
+            drawTimeOfDayChart('timeOfDayChart', t('timeOfDay'), res.timeOfDay, '100%');
+        }
         
-        await yieldToMain();
-        if (isChartEnabled('weaknessChart')) drawTagWeaknessChart('weaknessChart', t('weakness'), res.tagAttemptsAvg, '100%');
+        if (isChartEnabled('weaknessChart')) {
+            updateProgress(t('loadingDraw', { chart: t('weakness') }), 1);
+            await yieldToMain();
+            drawTagWeaknessChart('weaknessChart', t('weakness'), res.tagAttemptsAvg, '100%');
+        }
         
-        await yieldToMain();
-        if (isChartEnabled('langDiffChart')) drawBarChart('langDiffChart', t('langDiff'), res.langDifficulty, '49%');
+        if (isChartEnabled('langDiffChart')) {
+            updateProgress(t('loadingDraw', { chart: t('langDiff') }), 1);
+            await yieldToMain();
+            drawBarChart('langDiffChart', t('langDiff'), res.langDifficulty, '49%');
+        }
         
         const localizedErrorDiag = {};
         for (const [key, value] of Object.entries(res.errorDiagnosis)) {
             localizedErrorDiag[t(key)] = value;
         }
         
-        await yieldToMain();
-        if (isChartEnabled('errorDiagChart')) drawPieChart('errorDiagChart', t('errorDiag'), localizedErrorDiag);
+        if (isChartEnabled('errorDiagChart')) {
+            updateProgress(t('loadingDraw', { chart: t('errorDiag') }), 1);
+            await yieldToMain();
+            drawPieChart('errorDiagChart', t('errorDiag'), localizedErrorDiag);
+        }
 
+        updateProgress(t('loadingDraw', { chart: currentLang === 'zh' ? '统计摘要' : 'Statistics Summary' }), 1);
         await yieldToMain();
-        // Stats summary is text, let's keep it or hide it? The user requested hiding charts, stats summary is fine. 
-        // We didn't give it a toggle in the UI, so it stays.
         drawStatsSummary(res.stats);
         
-        await yieldToMain();
-        if (isChartEnabled('unsolvedChart')) drawUnsolvedChart(res.unsolved);
+        if (isChartEnabled('unsolvedChart')) {
+            updateProgress(t('loadingDraw', { chart: t('unsolved', { n: res.unsolved.length }) }), 1);
+            await yieldToMain();
+            drawUnsolvedChart(res.unsolved);
+        }
     }
 
     // --- 全局高级配置 (Premium Configurations) ---
     const premiumColors = ['#5470c6', '#91cc75', '#fac858', '#ee6666', '#73c0de', '#3ba272', '#fc8452', '#9a60b4', '#ea7ccc'];
-    const premiumTooltip = {
-        backgroundColor: 'rgba(255, 255, 255, 0.9)',
-        borderColor: 'rgba(255, 255, 255, 0.2)',
-        borderWidth: 1,
-        padding: [10, 15],
-        textStyle: { color: '#333' },
-        extraCssText: 'box-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.15); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); border-radius: 12px;'
+    const getPremiumTooltip = () => {
+        if (userSettings.liteMode) {
+            return {
+                backgroundColor: 'rgba(255, 255, 255, 0.95)',
+                borderColor: '#ccc',
+                borderWidth: 1,
+                padding: [10, 15],
+                textStyle: { color: '#333' },
+                extraCssText: 'border-radius: 8px;'
+            };
+        }
+        return {
+            backgroundColor: 'rgba(255, 255, 255, 0.9)',
+            borderColor: 'rgba(255, 255, 255, 0.2)',
+            borderWidth: 1,
+            padding: [10, 15],
+            textStyle: { color: '#333' },
+            extraCssText: 'box-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.15); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); border-radius: 12px;'
+        };
     };
     const premiumGrid = { left: '3%', right: '4%', bottom: '3%', containLabel: true };
 
@@ -482,7 +562,7 @@
         myChart.setOption({
             animation: false,
             title: { text: titleText, left: 'center', textStyle: { fontWeight: '600' } },
-            tooltip: { ...premiumTooltip, trigger: 'axis', axisPointer: { type: 'shadow', shadowStyle: { color: 'rgba(0,0,0,0.05)' } } },
+            tooltip: { ...getPremiumTooltip(), trigger: 'axis', axisPointer: { type: 'shadow', shadowStyle: { color: 'rgba(0,0,0,0.05)' } } },
             grid: premiumGrid,
             xAxis: [{ type: 'category', data: xData, axisTick: { alignWithLabel: true }, splitLine: { show: false } }],
             yAxis: [{ type: 'value', splitLine: { lineStyle: { type: 'dashed', opacity: 0.3 } } }],
@@ -492,6 +572,7 @@
                     borderRadius: [6, 6, 0, 0],
                     color: function(params) {
                         const baseColor = getRatingColor(Number(xData[params.dataIndex]));
+                        if (userSettings.liteMode) return baseColor;
                         return new echarts.graphic.LinearGradient(0, 0, 0, 1, [
                             { offset: 0, color: baseColor },
                             { offset: 1, color: '#ffffff' }
@@ -547,7 +628,7 @@
                     subtextStyle: { fontSize: 12, color: '#999', lineHeight: 14 }
                 }
             ],
-            tooltip: { ...premiumTooltip, trigger: 'item', formatter: '{b} : {c} ({d}%)' },
+            tooltip: { ...getPremiumTooltip(), trigger: 'item', formatter: '{b} : {c} ({d}%)' },
             legend: {
                 type: 'scroll', orient: 'horizontal', bottom: 10, left: 'center', width: '90%',
                 icon: 'circle', itemWidth: 10, itemHeight: 10, itemGap: 15,
@@ -563,9 +644,9 @@
                     borderRadius: 8, 
                     borderColor: '#fff', 
                     borderWidth: 2,
-                    shadowBlur: 8,
+                    shadowBlur: userSettings.liteMode ? 0 : 8,
                     shadowColor: 'rgba(0, 0, 0, 0.15)',
-                    shadowOffsetY: 3
+                    shadowOffsetY: userSettings.liteMode ? 0 : 3
                 },
                 label: { 
                     show: true, 
@@ -614,7 +695,7 @@
         myChart.setOption({
             animation: false,
             title: { text: titleText, left: 'center', textStyle: { fontWeight: '600' } },
-            tooltip: { ...premiumTooltip, trigger: 'axis' },
+            tooltip: { ...getPremiumTooltip(), trigger: 'axis' },
             grid: premiumGrid,
             xAxis: { type: 'category', boundaryGap: false, data: xData, splitLine: { show: false } },
             yAxis: { type: 'value', name: t('submissions'), splitLine: { lineStyle: { type: 'dashed', opacity: 0.3 } } },
@@ -622,12 +703,17 @@
             series: [{
                 name: t('submissions'), type: 'line', smooth: 0.4,
                 areaStyle: {
-                    color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
+                    color: userSettings.liteMode ? 'rgba(0, 115, 230, 0.1)' : new echarts.graphic.LinearGradient(0, 0, 0, 1, [
                         { offset: 0, color: 'rgba(0, 115, 230, 0.4)' },
                         { offset: 1, color: 'rgba(0, 115, 230, 0.0)' }
                     ])
                 },
-                lineStyle: { color: '#0073e6', width: 3, shadowColor: 'rgba(0,115,230,0.3)', shadowBlur: 10 },
+                lineStyle: { 
+                    color: '#0073e6', 
+                    width: 3, 
+                    shadowColor: 'rgba(0,115,230,0.3)', 
+                    shadowBlur: userSettings.liteMode ? 0 : 10 
+                },
                 itemStyle: { color: '#0073e6' },
                 data: yData
             }]
@@ -649,7 +735,7 @@
             title: { text: titleText, left: 'center', textStyle: { fontSize: 14, fontWeight: '600' } },
             grid: { left: '3%', right: '8%', bottom: '3%', containLabel: true },
             tooltip: {
-                ...premiumTooltip,
+                ...getPremiumTooltip(),
                 formatter: function (param) {
                     const data = param.data;
                     return `<div style="font-weight:bold;">${data[2]}</div>${axisName}: ${data[0]}<br/>${t('rating')}: ${data[1]}`;
@@ -663,7 +749,7 @@
                 type: 'scatter', 
                 itemStyle: { 
                     color: `rgba(${colorBase}, 0.7)`,
-                    shadowBlur: 5,
+                    shadowBlur: userSettings.liteMode ? 0 : 5,
                     shadowColor: `rgba(${colorBase}, 0.5)`
                 } 
             }]
@@ -682,7 +768,7 @@
         myChart.setOption({
             animation: false,
             title: { text: titleText, left: 'center', textStyle: { fontSize: 14, fontWeight: '600' } },
-            tooltip: { ...premiumTooltip, trigger: 'axis', axisPointer: { type: 'shadow' } },
+            tooltip: { ...getPremiumTooltip(), trigger: 'axis', axisPointer: { type: 'shadow' } },
             grid: premiumGrid,
             xAxis: { type: 'category', data: categories, axisTick: { alignWithLabel: true }, splitLine: { show: false } },
             yAxis: { type: 'value', name: t('submissions'), splitLine: { lineStyle: { type: 'dashed', opacity: 0.3 } } },
@@ -692,7 +778,7 @@
                 data: values,
                 itemStyle: {
                     borderRadius: [6, 6, 0, 0],
-                    color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
+                    color: userSettings.liteMode ? '#188df0' : new echarts.graphic.LinearGradient(0, 0, 0, 1, [
                         { offset: 0, color: '#83bff6' },
                         { offset: 0.5, color: '#188df0' },
                         { offset: 1, color: '#188df0' }
@@ -700,7 +786,7 @@
                 },
                 emphasis: {
                     itemStyle: {
-                        color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
+                        color: userSettings.liteMode ? '#2378f7' : new echarts.graphic.LinearGradient(0, 0, 0, 1, [
                             { offset: 0, color: '#2378f7' },
                             { offset: 0.7, color: '#2378f7' },
                             { offset: 1, color: '#83bff6' }
@@ -720,7 +806,7 @@
         myChart.setOption({
             animation: false,
             title: { text: titleText, left: 'center', textStyle: { fontSize: 14, fontWeight: '600' } },
-            tooltip: { ...premiumTooltip, trigger: 'axis' },
+            tooltip: { ...getPremiumTooltip(), trigger: 'axis' },
             grid: premiumGrid,
             xAxis: { type: 'category', boundaryGap: false, data: dataArr.map(d => d[0]), splitLine: { show: false } },
             yAxis: { type: 'value', min: 'dataMin', splitLine: { lineStyle: { type: 'dashed', opacity: 0.3 } } },
@@ -731,12 +817,17 @@
                 smooth: 0.4,
                 symbol: 'none',
                 areaStyle: {
-                    color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
+                    color: userSettings.liteMode ? 'rgba(219, 112, 147, 0.15)' : new echarts.graphic.LinearGradient(0, 0, 0, 1, [
                         { offset: 0, color: 'rgba(219, 112, 147, 0.6)' },
                         { offset: 1, color: 'rgba(219, 112, 147, 0.05)' }
                     ])
                 },
-                lineStyle: { color: '#db7093', width: 3, shadowBlur: 10, shadowColor: 'rgba(219, 112, 147, 0.4)' },
+                lineStyle: { 
+                    color: '#db7093', 
+                    width: 3, 
+                    shadowBlur: userSettings.liteMode ? 0 : 10, 
+                    shadowColor: 'rgba(219, 112, 147, 0.4)' 
+                },
                 data: dataArr.map(d => d[1])
             }]
         });
@@ -751,7 +842,7 @@
         myChart.setOption({
             animation: false,
             title: { text: titleText, left: 'center', textStyle: { fontSize: 14, fontWeight: '600' } },
-            tooltip: { ...premiumTooltip, trigger: 'axis', axisPointer: { type: 'shadow' } },
+            tooltip: { ...getPremiumTooltip(), trigger: 'axis', axisPointer: { type: 'shadow' } },
             grid: premiumGrid,
             xAxis: { type: 'category', data: xData, axisTick: { alignWithLabel: true }, splitLine: { show: false } },
             yAxis: { type: 'value', splitLine: { lineStyle: { type: 'dashed', opacity: 0.3 } } },
@@ -761,7 +852,7 @@
                 data: timeArr,
                 itemStyle: {
                     borderRadius: [6, 6, 0, 0],
-                    color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
+                    color: userSettings.liteMode ? '#4facfe' : new echarts.graphic.LinearGradient(0, 0, 0, 1, [
                         { offset: 0, color: '#4facfe' },
                         { offset: 1, color: '#00f2fe' }
                     ])
@@ -785,7 +876,7 @@
         myChart.setOption({
             animation: false,
             title: { text: titleText, left: 'center', textStyle: { fontSize: 14, fontWeight: '600' } },
-            tooltip: { ...premiumTooltip, trigger: 'axis', axisPointer: { type: 'shadow' } },
+            tooltip: { ...getPremiumTooltip(), trigger: 'axis', axisPointer: { type: 'shadow' } },
             grid: { left: '3%', right: '8%', bottom: '3%', containLabel: true },
             xAxis: { type: 'value', name: 'Avg Tries', splitLine: { lineStyle: { type: 'dashed', opacity: 0.3 } } },
             yAxis: { type: 'category', data: yData, axisLabel: { width: 100, overflow: 'truncate' }, splitLine: { show: false } },
@@ -796,7 +887,7 @@
                 data: xData,
                 itemStyle: {
                     borderRadius: [0, 6, 6, 0],
-                    color: new echarts.graphic.LinearGradient(1, 0, 0, 0, [
+                    color: userSettings.liteMode ? '#ff758c' : new echarts.graphic.LinearGradient(1, 0, 0, 0, [
                         { offset: 0, color: '#ff758c' },
                         { offset: 1, color: '#ff7eb3' }
                     ])
@@ -1087,13 +1178,43 @@
     }
 
     // --- 加载状态管理 ---
+    let currentStep = 0;
+    let totalSteps = 3;
+
     const showLoading = () => {
         hideLoading();
+        
+        const maskStyle = userSettings.liteMode 
+            ? "position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: rgba(0, 0, 0, 0.7); z-index: 99999; display: flex; justify-content: center; align-items: center; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;"
+            : "position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: rgba(0, 0, 0, 0.4); backdrop-filter: blur(5px); -webkit-backdrop-filter: blur(5px); z-index: 99999; display: flex; justify-content: center; align-items: center; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;";
+            
+        const barTransition = userSettings.liteMode ? "none" : "width 0.2s ease";
+
         const html = `
-            <div id="cf-loading-mask" style="position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: rgba(255,255,255,0.8); z-index: 9999; display: flex; flex-direction: column; justify-content: center; align-items: center;">
-                <div id="cf-loading-close" style="position: absolute; top: 20px; right: 30px; font-size: 36px; cursor: pointer; color: #888; font-weight: bold; line-height: 1; transition: color 0.2s;" onmouseover="this.style.color='#333'" onmouseout="this.style.color='#888'" title="Close">&times;</div>
-                <div style="width: 50px; height: 50px; border: 5px solid #f3f3f3; border-top: 5px solid #0073e6; border-radius: 50%; animation: cf-spin 1s linear infinite;"></div>
-                <h3 id="cf-loading-text" style="margin-top: 20px; color: #333; font-family: sans-serif;">${t('loading')}</h3>
+            <div id="cf-loading-mask" style="${maskStyle}">
+                <div style="background: rgba(255, 255, 255, 0.95); padding: 30px; border-radius: 16px; box-shadow: 0 20px 40px rgba(0, 0, 0, 0.2); width: 360px; text-align: center; position: relative; border: 1px solid rgba(255, 255, 255, 0.3); display: flex; flex-direction: column; align-items: center;">
+                    <div id="cf-loading-close" style="position: absolute; top: 15px; right: 20px; font-size: 24px; cursor: pointer; color: #aaa; font-weight: normal; line-height: 1; transition: color 0.2s;" onmouseover="this.style.color='#666'" onmouseout="this.style.color='#aaa'" title="Close">&times;</div>
+                    
+                    <div style="margin-bottom: 20px; position: relative; width: 60px; height: 60px;">
+                        <div style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; border: 4px solid rgba(59, 130, 246, 0.1); border-top: 4px solid #3b82f6; border-radius: 50%; animation: cf-spin 1s linear infinite;"></div>
+                        <div style="position: absolute; top: 12px; left: 12px; width: 36px; height: 36px; background: linear-gradient(135deg, #3b82f6, #6366f1); border-radius: 50%; display: flex; justify-content: center; align-items: center;">
+                            <svg viewBox="0 0 24 24" style="width: 20px; height: 20px; fill: white;">
+                                <path d="M19,3H5C3.9,3,3,3.9,3,5v14c0,1.1,0.9,2,2,2h14c1.1,0,2-0.9,2-2V5C21,3.9,20.1,3,19,3z M9,17H7v-7h2V17z M13,17h-2V7h2V17z M17,17h-2v-4h2V17z"/>
+                            </svg>
+                        </div>
+                    </div>
+
+                    <h3 id="cf-loading-title" style="margin: 0 0 10px 0; color: #1f2937; font-size: 18px; font-weight: 600;">Codeforces Analytics</h3>
+                    
+                    <div style="width: 100%; background: #f3f4f6; height: 8px; border-radius: 4px; overflow: hidden; margin: 15px 0; position: relative;">
+                        <div id="cf-progress-bar" style="width: 0%; height: 100%; background: linear-gradient(90deg, #3b82f6, #6366f1); transition: ${barTransition}; border-radius: 4px;"></div>
+                    </div>
+
+                    <div style="display: flex; justify-content: space-between; width: 100%; font-size: 12px; color: #6b7280; font-weight: 500;">
+                        <span id="cf-loading-text" style="max-width: 80%; text-align: left; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${t('loading')}</span>
+                        <span id="cf-progress-percent">0%</span>
+                    </div>
+                </div>
                 <style>@keyframes cf-spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }</style>
             </div>
         `;
@@ -1105,6 +1226,23 @@
         });
     };
 
+    const updateProgress = (text, stepIncrement = 1) => {
+        if (!document.getElementById('cf-loading-mask')) return;
+
+        currentStep += stepIncrement;
+        if (currentStep > totalSteps) currentStep = totalSteps;
+        
+        const percent = Math.round((currentStep / totalSteps) * 100);
+        
+        const barEl = document.getElementById('cf-progress-bar');
+        const percentEl = document.getElementById('cf-progress-percent');
+        const textEl = document.getElementById('cf-loading-text');
+        
+        if (barEl) barEl.style.width = `${percent}%`;
+        if (percentEl) percentEl.textContent = `${percent}%`;
+        if (textEl) textEl.textContent = text;
+    };
+
     const hideLoading = () => {
         const el = document.getElementById('cf-loading-mask');
         if (el) el.remove();
@@ -1112,17 +1250,27 @@
 
     // --- 主入口 ---
     async function init() {
-        var handle = "";
-        const queryString = window.location.search;
-        const urlParams = new URLSearchParams(queryString);
-        if(urlParams.has("handle")){
-            handle = urlParams.get("handle");
-        }else{
-            handle="tongwentao";
-        }
+        const pathname = window.location.pathname;
+        const handle = pathname.substring(pathname.lastIndexOf('/') + 1);
         if (!handle) return;
 
+        // Calculate total steps dynamically
+        const charts = [
+            'timelineChart', 'ratingChart', 'tagsChart', 'langChart', 'verdictChart',
+            'attemptsChart', 'participantChart', 'performanceChart', 'memoryChart',
+            'speedChart', 'maChart', 'timeOfDayChart', 'weaknessChart', 'langDiffChart',
+            'errorDiagChart', 'unsolvedChart'
+        ];
+        let enabledCount = 0;
+        for (const chart of charts) {
+            if (isChartEnabled(chart)) enabledCount++;
+        }
+        // totalSteps = 1 (fetch) + 1 (process) + enabledCount + 1 (statsSummary)
+        totalSteps = 2 + enabledCount + 1;
+        currentStep = 0;
+
         showLoading();
+        updateProgress(t('loadingFetch'), 1);
 
         try {
             const response = await fetch(`https://codeforces.com/api/user.status?handle=${handle}`);
@@ -1130,8 +1278,10 @@
             const json = await response.json();
 
             if (json.status === "OK") {
+                updateProgress(t('loadingProcess'), 1);
                 const processedData = processSubmissions(json.result);
                 await drawCharts(processedData);
+                updateProgress(t('loadingComplete'), 0);
             }
         } catch (err) {
             console.error("Failed to load CF Data:", err);
